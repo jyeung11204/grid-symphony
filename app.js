@@ -713,6 +713,13 @@ function drawBars(days, avg) {
   svg.innerHTML = html;
 }
 
+// Five clean-share bands, fixed so years compare: 0 is most strained, 4 cleanest
+const BANDS = [400, 450, 500, 550];
+const BAND_LABELS = ["Under 40%", "40–45%", "45–50%", "50–55%", "55% or more"];
+const bandOf = (permille) => BANDS.filter((b) => permille >= b).length;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 async function showYear(year) {
   showView("year", "year");
   const daily = await loadDaily();
@@ -721,86 +728,87 @@ async function showYear(year) {
   $("y-title").textContent = String(year);
   const hourly = await loadHourly(year);
   const rows = daily.days.filter((d) => d.date.startsWith(String(year)));
-  if (rows.length) {
-    const avg = rows.reduce((s, d) => s + d.clean, 0) / rows.length;
-    const best = rows.reduce((a, b) => (b.clean > a.clean ? b : a));
-    const worst = rows.reduce((a, b) => (b.clean < a.clean ? b : a));
-    const peak = rows.reduce((a, b) => (b.peak > a.peak ? b : a));
-    $("y-summary").innerHTML = [
-      ["Days saved", rows.length],
-      ["Average clean", pct(avg)],
-      ["Cleanest day", `<a href="#day-${best.date}">${shortDate(best.date)}</a> ${pct(best.clean)}`],
-      ["Most strained", `<a href="#day-${worst.date}">${shortDate(worst.date)}</a> ${pct(worst.clean)}`],
-      ["Peak demand", `<a href="#day-${peak.date}">${shortDate(peak.date)}</a> ${fmtMW(peak.peak)} MW`],
-    ].map(([k, v]) => `<span>${k} <strong>${v}</strong></span>`).join("");
+  const byDate = new Map(rows.map((d) => [d.date, d]));
+
+  // Monthly totals from each day's generation by fuel
+  const months = MONTHS.map((_, m) => {
+    const ds = rows.filter((d) => +d.date.slice(5, 7) === m + 1);
+    const mwh = {}; let tot = 0;
+    for (const d of ds) for (const [f, v] of Object.entries(d.mwh)) { mwh[f] = (mwh[f] || 0) + v; tot += v; }
+    const clean = tot ? FUELS.filter((f) => f.clean).reduce((s, f) => s + (mwh[f.k] || 0), 0) / tot : null;
+    return { m, days: ds, mwh, tot, clean: clean == null ? null : Math.round(clean * 1000) };
+  }).filter((x) => x.days.length);
+
+  renderYearStats(rows, months);
+  $("y-bins").innerHTML = BAND_LABELS.map((l, i) => `<span class="b${i}"><i></i>${l}</span>`).join("")
+    + `<span><i style="border:1px dashed var(--line);background:none"></i>Not saved</span>`;
+  $("y-months").innerHTML = months.map((mo) => calendarMonth(year, mo, byDate)).join("");
+  renderMonthMix(months);
+  renderTypicalDay(hourly, months);
+}
+
+function renderYearStats(rows, months) {
+  if (!rows.length) { $("y-stats").innerHTML = ""; return; }
+  const tot = months.reduce((s, m) => s + m.tot, 0);
+  const cleanMwh = months.reduce((s, m) => s + FUELS.filter((f) => f.clean).reduce((a, f) => a + (m.mwh[f.k] || 0), 0), 0);
+  const bestM = months.reduce((a, b) => (b.clean > a.clean ? b : a));
+  const worstM = months.reduce((a, b) => (b.clean < a.clean ? b : a));
+  const best = rows.reduce((a, b) => (b.clean > a.clean ? b : a));
+  const peak = rows.reduce((a, b) => (b.peak > a.peak ? b : a));
+  const stat = (k, v, sub) => `<div class="ystat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+  $("y-stats").innerHTML = [
+    stat("Clean energy", pct((cleanMwh / tot) * 1000), `across ${rows.length} saved days`),
+    stat("Cleanest month", MONTHS_LONG[bestM.m], `${pct(bestM.clean)} clean`),
+    stat("Most strained month", MONTHS_LONG[worstM.m], `${pct(worstM.clean)} clean`),
+    stat("Cleanest day", `<a href="#day-${best.date}">${shortDate(best.date)}</a>`, `${pct(best.clean)} clean`),
+    stat("Peak demand", `<a href="#day-${peak.date}">${shortDate(peak.date)}</a>`, `${fmtMW(peak.peak)} MW at ${to12(peak.peakAt)}`),
+  ].join("");
+}
+
+function calendarMonth(year, mo, byDate) {
+  const first = new Date(Date.UTC(year, mo.m, 1));
+  const lead = (first.getUTCDay() + 6) % 7; // weeks start on Monday
+  const n = new Date(Date.UTC(year, mo.m + 1, 0)).getUTCDate();
+  let cells = "MTWTFSS".split("").map((d) => `<span class="dow">${d}</span>`).join("");
+  cells += "<span></span>".repeat(lead);
+  for (let d = 1; d <= n; d++) {
+    const iso = `${year}-${String(mo.m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const row = byDate.get(iso);
+    cells += row
+      ? `<a class="c b${bandOf(row.clean)}" href="#day-${iso}" title="${fmtDate(iso, { weekday: "short", month: "short", day: "numeric" })}: ${pct(row.clean)} clean, peak ${fmtMW(row.peak)} MW">${d}</a>`
+      : `<span class="c none">${d}</span>`;
   }
-  heatState.year = year; heatState.hourly = hourly;
-  drawHeat();
+  return `<div class="cal"><h4>${MONTHS_LONG[mo.m]}<span class="b${bandOf(mo.clean)}">${pct(mo.clean)}</span></h4><div class="grid">${cells}</div></div>`;
 }
 
-const heatState = { year: null, hourly: null, cell: 3, top: 4, left: 46 };
-
-function hexToRgb(hex) {
-  const h = hex.trim().replace("#", "");
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+function renderMonthMix(months) {
+  $("y-mix").innerHTML = months.map((mo) => {
+    const bar = FUELS.map((f) => {
+      const share = (mo.mwh[f.k] || 0) / mo.tot;
+      return share ? `<span title="${fuelLabel(f)} ${Math.round(share * 100)}%" style="width:${(share * 100).toFixed(2)}%;background:var(--${f.c})"></span>` : "";
+    }).join("");
+    return `<div class="mrow"><span class="ml">${MONTHS[mo.m]}</span><div class="mixbar">${bar}</div><span class="mv">${pct(mo.clean)}</span></div>`;
+  }).join("");
+  $("y-mix-legend").innerHTML = FUELS.filter((f) => months.some((m) => m.mwh[f.k] > 0))
+    .map((f) => `<span><i style="background:var(--${f.c})"></i>${fuelLabel(f)}</span>`).join("")
+    + `<span>Right column: clean share</span>`;
 }
 
-function drawHeat() {
-  const { year, hourly } = heatState;
-  if (!hourly) return;
-  const canvas = $("heat"), wrap = $("heat-wrap");
-  const css = getComputedStyle(document.documentElement);
-  const calm = hexToRgb(css.getPropertyValue("--calm")), hot = hexToRgb(css.getPropertyValue("--hot"));
-  const empty = css.getPropertyValue("--line").trim(), muted = css.getPropertyValue("--muted").trim();
-  const jan1 = new Date(Date.UTC(year, 0, 1));
-  const nDays = (Date.UTC(year + 1, 0, 1) - jan1) / 864e5;
-  const left = heatState.left, top = heatState.top, bottom = 22;
-  const cw = Math.max(2, Math.floor((wrap.clientWidth - left - 4) / nDays));
-  const ch = 9;
-  heatState.cell = cw; heatState.ch = ch;
-  const W = left + cw * nDays + 4, H = top + ch * 24 + bottom;
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = W * dpr; canvas.height = H * dpr;
-  canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-
-  ctx.fillStyle = empty;
-  ctx.fillRect(left, top, cw * nDays, ch * 24);
-  const index = new Map(hourly.dates.map((d, i) => [d, i]));
-  for (let d = 0; d < nDays; d++) {
-    const iso = new Date(jan1.getTime() + d * 864e5).toISOString().slice(0, 10);
-    const i = index.get(iso);
-    if (i == null) continue;
-    hourly.clean[i].forEach((c, h) => {
-      if (c == null) return;
-      const k = tenseOf(c / 1000);
-      ctx.fillStyle = `rgb(${calm.map((v, j) => Math.round(v + (hot[j] - v) * k)).join(",")})`;
-      ctx.fillRect(left + d * cw, top + h * ch, cw, ch);
+function renderTypicalDay(hourly, months) {
+  let html = `<span></span>` + Array.from({ length: 24 }, (_, h) => `<span class="hh">${h % 6 === 0 ? hourLabel(h).replace(" ", "").replace("Noon", "12PM") : ""}</span>`).join("");
+  for (const mo of months) {
+    const sums = new Array(24).fill(0), counts = new Array(24).fill(0);
+    hourly.dates.forEach((iso, i) => {
+      if (+iso.slice(5, 7) !== mo.m + 1) return;
+      hourly.clean[i].forEach((c, h) => { if (c != null) { sums[h] += c; counts[h]++; } });
     });
+    html += `<span class="ml">${MONTHS[mo.m]}</span>` + sums.map((s, h) => {
+      if (!counts[h]) return `<span class="hc" style="background:none"></span>`;
+      const v = s / counts[h];
+      return `<span class="hc b${bandOf(v)}" title="${MONTHS_LONG[mo.m]}, ${hourLabel(h)}: ${pct(v)} clean"></span>`;
+    }).join("");
   }
-  ctx.fillStyle = muted;
-  ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
-  ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (const h of [0, 6, 12, 18]) ctx.fillText(hourLabel(h), left - 6, top + h * ch + ch / 2);
-  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-  for (let m = 0; m < 12; m++) {
-    const d = (Date.UTC(year, m, 1) - jan1) / 864e5;
-    ctx.fillText(new Date(Date.UTC(year, m, 15)).toLocaleString("en-US", { month: "short", timeZone: "UTC" }), left + d * cw + 2, top + ch * 24 + 16);
-  }
-  heatState.jan1 = jan1; heatState.nDays = nDays; heatState.index = index;
-}
-
-function heatHit(e) {
-  const { left, top, cell, ch, jan1, nDays, hourly, index } = heatState;
-  const rect = $("heat").getBoundingClientRect();
-  const x = e.clientX - rect.left, y = e.clientY - rect.top;
-  const d = Math.floor((x - left) / cell), h = Math.floor((y - top) / ch);
-  if (d < 0 || d >= nDays || h < 0 || h > 23) return null;
-  const iso = new Date(jan1.getTime() + d * 864e5).toISOString().slice(0, 10);
-  const i = index.get(iso);
-  return { iso, h, x, y, clean: i == null ? null : hourly.clean[i][h], demand: i == null ? null : hourly.demand[i][h], saved: i != null };
+  $("y-hours").innerHTML = html;
 }
 
 async function showAll() {
@@ -895,27 +903,12 @@ $("chart").addEventListener("keydown", (e) => {
 });
 // Tiles and "Play the month" start playing on arrival
 document.addEventListener("click", (e) => {
-  const a = e.target.closest("a.tile, #play-month");
+  const a = e.target.closest("a.tile, #play-month, .cal a.c");
   if (a) pendingAutoplay = true;
 });
 $("t-bars").addEventListener("click", (e) => {
   const r = e.target.closest("rect.day");
   if (r) { pendingAutoplay = true; location.hash = `day-${r.dataset.date}`; }
-});
-$("heat").addEventListener("mousemove", (e) => {
-  const hit = heatHit(e), tip = $("tip");
-  if (!hit || !hit.saved) { tip.hidden = true; return; }
-  tip.hidden = false;
-  tip.textContent = `${fmtDate(hit.iso, { weekday: "short", month: "short", day: "numeric" })} · ${hourLabel(hit.h)} · ${hit.clean == null ? "no data" : pct(hit.clean) + " clean"} · ${hit.demand ? fmtMW(hit.demand) + " MW" : ""}`;
-  const wrap = $("heat-wrap");
-  const x = Math.min(hit.x + 12 - wrap.scrollLeft, wrap.clientWidth - tip.offsetWidth - 4);
-  tip.style.left = `${Math.max(4, x) + wrap.scrollLeft}px`;
-  tip.style.top = `${hit.y + 14}px`;
-});
-$("heat").addEventListener("mouseleave", () => ($("tip").hidden = true));
-$("heat").addEventListener("click", (e) => {
-  const hit = heatHit(e);
-  if (hit?.saved) { pendingAutoplay = true; location.hash = `day-${hit.iso}`; }
 });
 $("a-chart").addEventListener("click", (e) => {
   const { days, l, pw, t0, t1 } = allState;
@@ -934,11 +927,9 @@ window.addEventListener("resize", () => {
   resizeTimer = setTimeout(() => {
     if (!$("view-player").hidden && series) { buildChart(); renderPlayhead(stateAt(clamp(posNow()))); }
     if (!$("view-trends").hidden) showTrends();
-    if (!$("view-year").hidden) drawHeat();
     if (!$("view-all").hidden && allState.days) drawAll(allState.days);
   }, 150);
 });
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawHeat);
 
 buildMap(); buildMix();
 window.addEventListener("hashchange", route);

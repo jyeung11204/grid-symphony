@@ -123,24 +123,44 @@
     <section class="tiles" id="tiles" aria-label="Days"></section>
   </main>
 
-  <!-- Year: day × hour heatmap -->
+  <!-- Year: calendar of days, monthly mix, typical day per month -->
   <main id="view-year" class="view" hidden>
     <div class="view-head">
       <div class="title-block">
-        <div class="eyebrow">Every hour of the year</div>
+        <div class="eyebrow">The year in review</div>
         <h2 id="y-title">Year</h2>
-        <p class="note">Each column is a day and each row an hour, midnight at the top. Click a day to hear it.</p>
+        <p class="note">How much of New York's in-state power came from nuclear, hydro, wind and solar, day by day. Click any day to hear it.</p>
       </div>
       <div class="controls"><div class="seg" id="y-years" role="group" aria-label="Choose a year"></div></div>
     </div>
+
+    <section class="ystats" id="y-stats"></section>
+
     <section class="panel">
-      <div class="summary" id="y-summary"></div>
-      <div class="heat-wrap" id="heat-wrap">
-        <canvas id="heat" role="img" aria-label="Heatmap of hourly clean share for the year"></canvas>
-        <div class="tip" id="tip" hidden></div>
+      <div class="panel-head">
+        <h3>Every day</h3>
+        <div class="bins" id="y-bins" aria-label="Color key"></div>
       </div>
-      <div class="legend"><span>Clean</span><span class="ramp rev"></span><span>Strained</span><span class="sw-none"></span><span>Not saved</span></div>
+      <div class="months" id="y-months"></div>
     </section>
+
+    <div class="split">
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Month by month</h3>
+          <span class="note">Share of generation by source</span>
+        </div>
+        <div class="monthmix" id="y-mix"></div>
+        <div class="chart-legend" id="y-mix-legend"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>A typical day</h3>
+          <span class="note">Average clean share by hour, for each month</span>
+        </div>
+        <div class="hours-wrap"><div class="hourgrid" id="y-hours" role="table" aria-label="Average clean share by month and hour"></div></div>
+      </section>
+    </div>
   </main>
 
   <!-- All time -->
