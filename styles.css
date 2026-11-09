@@ -192,6 +192,12 @@ a:focus-visible, button:focus-visible, .chart:focus-visible, canvas:focus-visibl
 .mrow .mixbar { height: 16px; min-width: 0; }
 .mixbar span { display: block; height: 100%; }
 
+.heat-wrap { position: relative; overflow-x: auto; padding-bottom: 4px; }
+#heat { display: block; cursor: pointer; }
+.tip {
+  position: absolute; pointer-events: none; z-index: 2; white-space: nowrap;
+  background: var(--ink); color: var(--bg); font: 400 12px var(--mono); padding: 6px 9px; border-radius: 6px;
+}
 .hours-wrap { overflow-x: auto; }
 .hourgrid { display: grid; grid-template-columns: 34px repeat(24, minmax(12px, 1fr)); gap: 2px; min-width: 420px; font: 400 10.5px var(--mono); color: var(--muted); }
 .hourgrid .hh { text-align: left; white-space: nowrap; overflow: visible; }

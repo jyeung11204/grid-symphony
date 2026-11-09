@@ -161,6 +161,17 @@
         <div class="hours-wrap"><div class="hourgrid" id="y-hours" role="table" aria-label="Average clean share by month and hour"></div></div>
       </section>
     </div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Every hour</h3>
+        <span class="note">Each column is a day and each row an hour, midnight at the top. Click to hear a day.</span>
+      </div>
+      <div class="heat-wrap" id="heat-wrap">
+        <canvas id="heat" role="img" aria-label="Heatmap of hourly clean share for the year"></canvas>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="legend"><span>Clean</span><span class="ramp"></span><span>Strained</span><span class="sw-none"></span><span>Not saved</span></div>
+    </section>
   </main>
 
   <!-- All time -->

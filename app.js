@@ -745,6 +745,8 @@ async function showYear(year) {
   $("y-months").innerHTML = months.map((mo) => calendarMonth(year, mo, byDate)).join("");
   renderMonthMix(months);
   renderTypicalDay(hourly, months);
+  heatState.year = year; heatState.hourly = hourly;
+  drawHeat();
 }
 
 function renderYearStats(rows, months) {
@@ -809,6 +811,72 @@ function renderTypicalDay(hourly, months) {
     }).join("");
   }
   $("y-hours").innerHTML = html;
+}
+
+// Hourly overview: one column per day, one row per hour
+const heatState = { year: null, hourly: null, cell: 3, top: 4, left: 46 };
+
+function hexToRgb(hex) {
+  const h = hex.trim().replace("#", "");
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+}
+
+function drawHeat() {
+  const { year, hourly } = heatState;
+  if (!hourly) return;
+  const canvas = $("heat"), wrap = $("heat-wrap");
+  const css = getComputedStyle(document.documentElement);
+  const calm = hexToRgb(css.getPropertyValue("--calm")), hot = hexToRgb(css.getPropertyValue("--hot"));
+  const empty = css.getPropertyValue("--line").trim(), muted = css.getPropertyValue("--muted").trim();
+  const jan1 = new Date(Date.UTC(year, 0, 1));
+  const nDays = (Date.UTC(year + 1, 0, 1) - jan1) / 864e5;
+  const left = heatState.left, top = heatState.top, bottom = 22;
+  const cw = Math.max(2, (wrap.clientWidth - left - 4) / nDays);
+  const ch = 9;
+  heatState.cell = cw; heatState.ch = ch;
+  const W = left + cw * nDays + 4, H = top + ch * 24 + bottom;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = empty;
+  ctx.fillRect(left, top, cw * nDays, ch * 24);
+  const index = new Map(hourly.dates.map((d, i) => [d, i]));
+  for (let d = 0; d < nDays; d++) {
+    const iso = new Date(jan1.getTime() + d * 864e5).toISOString().slice(0, 10);
+    const i = index.get(iso);
+    if (i == null) continue;
+    hourly.clean[i].forEach((c, h) => {
+      if (c == null) return;
+      const k = tenseOf(c / 1000);
+      ctx.fillStyle = `rgb(${calm.map((v, j) => Math.round(v + (hot[j] - v) * k)).join(",")})`;
+      ctx.fillRect(left + d * cw, top + h * ch, cw + 0.5, ch);
+    });
+  }
+  ctx.fillStyle = muted;
+  ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const h of [0, 6, 12, 18]) ctx.fillText(hourLabel(h), left - 6, top + h * ch + ch / 2);
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  for (let m = 0; m < 12; m++) {
+    const d = (Date.UTC(year, m, 1) - jan1) / 864e5;
+    ctx.fillText(new Date(Date.UTC(year, m, 15)).toLocaleString("en-US", { month: "short", timeZone: "UTC" }), left + d * cw + 2, top + ch * 24 + 16);
+  }
+  heatState.jan1 = jan1; heatState.nDays = nDays; heatState.index = index;
+}
+
+function heatHit(e) {
+  const { left, top, cell, ch, jan1, nDays, hourly, index } = heatState;
+  const rect = $("heat").getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const d = Math.floor((x - left) / cell), h = Math.floor((y - top) / ch);
+  if (d < 0 || d >= nDays || h < 0 || h > 23) return null;
+  const iso = new Date(jan1.getTime() + d * 864e5).toISOString().slice(0, 10);
+  const i = index.get(iso);
+  return { iso, h, x, y, clean: i == null ? null : hourly.clean[i][h], demand: i == null ? null : hourly.demand[i][h], saved: i != null };
 }
 
 async function showAll() {
@@ -910,6 +978,21 @@ $("t-bars").addEventListener("click", (e) => {
   const r = e.target.closest("rect.day");
   if (r) { pendingAutoplay = true; location.hash = `day-${r.dataset.date}`; }
 });
+$("heat").addEventListener("mousemove", (e) => {
+  const hit = heatHit(e), tip = $("tip");
+  if (!hit || !hit.saved) { tip.hidden = true; return; }
+  tip.hidden = false;
+  tip.textContent = `${fmtDate(hit.iso, { weekday: "short", month: "short", day: "numeric" })} · ${hourLabel(hit.h)} · ${hit.clean == null ? "no data" : pct(hit.clean) + " clean"} · ${hit.demand ? fmtMW(hit.demand) + " MW" : ""}`;
+  const wrap = $("heat-wrap");
+  const x = Math.min(hit.x + 12 - wrap.scrollLeft, wrap.clientWidth - tip.offsetWidth - 4);
+  tip.style.left = `${Math.max(4, x) + wrap.scrollLeft}px`;
+  tip.style.top = `${hit.y + 14}px`;
+});
+$("heat").addEventListener("mouseleave", () => ($("tip").hidden = true));
+$("heat").addEventListener("click", (e) => {
+  const hit = heatHit(e);
+  if (hit?.saved) { pendingAutoplay = true; location.hash = `day-${hit.iso}`; }
+});
 $("a-chart").addEventListener("click", (e) => {
   const { days, l, pw, t0, t1 } = allState;
   if (!days) return;
@@ -921,12 +1004,15 @@ $("a-chart").addEventListener("click", (e) => {
   location.hash = `day-${best.date}`;
 });
 
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawHeat);
+
 let resizeTimer;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
     if (!$("view-player").hidden && series) { buildChart(); renderPlayhead(stateAt(clamp(posNow()))); }
     if (!$("view-trends").hidden) showTrends();
+    if (!$("view-year").hidden) drawHeat();
     if (!$("view-all").hidden && allState.days) drawAll(allState.days);
   }, 150);
 });
