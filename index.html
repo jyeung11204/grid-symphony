@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grid Symphony</title>
+<meta name="description" content="New York's power grid, played as one minute of music a day. Live NYISO data, a 30-day trend and a growing archive.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231d58b8'/%3E%3Cpath d='M6 20h3l2-8 3 12 3-16 3 12 2-4h4' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,750&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <div>
+      <div class="eyebrow">New York ISO · one minute of music per day</div>
+      <h1><a href="#today">Grid Symphony</a></h1>
+      <p class="lede">Each power source is an instrument. Clean hours ring open and bright; hours leaning on gas turn tense and dense. Demand sets the tempo.</p>
+    </div>
+    <nav class="seg" id="tabs" aria-label="Views">
+      <a href="#today" data-v="today">Today</a>
+      <a href="#trends" data-v="trends">Trends</a>
+      <a href="#year" data-v="year">Year</a>
+      <a href="#all" data-v="all">All time</a>
+    </nav>
+  </header>
+
+  <!-- Player: today, any saved day, or the last 30 days compressed -->
+  <main id="view-player" class="view" hidden>
+    <div class="view-head">
+      <div class="title-block">
+        <div class="eyebrow" id="p-eyebrow">Today so far</div>
+        <h2 id="p-title">Loading…</h2>
+        <p class="note" id="p-note"></p>
+      </div>
+      <div class="controls">
+        <div class="stepper" id="stepper">
+          <a id="p-prev" href="#">← <span></span></a>
+          <a id="p-next" href="#"><span></span> →</a>
+        </div>
+        <button class="play" id="play" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path id="play-icon" d="M8 5v14l11-7z"/></svg>
+          <span id="play-label">Play</span>
+        </button>
+      </div>
+    </div>
+
+    <section class="stage">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Load by zone</h3>
+          <span class="note">Circle size is megawatts in use</span>
+        </div>
+        <svg id="map" viewBox="0 0 590 462" role="img" aria-label="Map of New York's eleven grid zones sized by electricity demand"></svg>
+        <div class="legend"><span>Light use</span><span class="ramp"></span><span>Near the zone's highest load this year</span></div>
+      </div>
+
+      <div class="panel now">
+        <div class="panel-head" style="margin:0">
+          <h3 id="now-title">Latest reading</h3>
+          <span class="note" id="now-date"></span>
+        </div>
+        <div class="clock" id="clock">--:--<small>ET</small></div>
+        <div class="mood" id="mood"><i></i><span id="mood-text"></span></div>
+        <div class="stats">
+          <div class="stat"><div class="k">Demand</div><div class="v" id="s-demand">–</div></div>
+          <div class="stat"><div class="k">Clean</div><div class="v" id="s-clean">–</div></div>
+          <div class="stat"><div class="k">Tempo</div><div class="v" id="s-bpm">–</div></div>
+        </div>
+        <ul class="mix" id="mix"></ul>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h3 id="chart-title">The day's fuel mix</h3>
+        <span class="note">Click the chart to jump there</span>
+      </div>
+      <div class="summary" id="summary"></div>
+      <svg class="chart" id="chart" tabindex="0" role="slider" aria-label="Playback position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"></svg>
+      <div class="chart-legend" id="chart-legend"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h3>How the grid becomes music</h3></div>
+      <dl class="key">
+        <div><dt>Nuclear → low drone</dt><dd>A steady bass tone. It barely moves, like the plants.</dd></div>
+        <div><dt>Hydro → flowing pad</dt><dd>Warm, slowly swelling chords. Louder when Niagara and St. Lawrence run high.</dd></div>
+        <div><dt>Wind → breath and bells</dt><dd>Air through a filter, with high bells that ring more often as wind output rises.</dd></div>
+        <div><dt>Solar and other renewables → plucks</dt><dd>They play the melody. More output, more notes.</dd></div>
+        <div><dt>Gas and dual fuel → saws and brass</dt><dd>A buzzing drone and short brass stabs. They get harsher and add a clashing note as the clean share drops.</dd></div>
+        <div><dt>Clean share → key</dt><dd>Above about 54% clean the piece plays in a bright major key. In the middle it plays Dorian. Below about 46% it turns to a tense Phrygian.</dd></div>
+        <div><dt>Demand → tempo</dt><dd>A soft heartbeat on every beat. Statewide load sets its speed, from roughly 60 to 135 beats per minute.</dd></div>
+        <div><dt>Zone strain → color</dt><dd>On the map, each zone warms toward red as it nears its highest load in the archive.</dd></div>
+      </dl>
+    </section>
+  </main>
+
+  <!-- Trends: last 30 days -->
+  <main id="view-trends" class="view" hidden>
+    <div class="view-head">
+      <div class="title-block">
+        <div class="eyebrow">Last 30 days</div>
+        <h2>How clean was each day?</h2>
+        <p class="note" id="t-note"></p>
+      </div>
+      <div class="controls">
+        <a class="play" href="#month" id="play-month">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          <span>Play the month</span>
+        </a>
+      </div>
+    </div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Daily clean share</h3>
+        <span class="note">Share of in-state generation from nuclear, hydro, wind, solar and other renewables</span>
+      </div>
+      <svg class="bars" id="t-bars" role="img" aria-label="Bar chart of daily clean share over the last 30 days"></svg>
+    </section>
+    <section class="tiles" id="tiles" aria-label="Days"></section>
+  </main>
+
+  <!-- Year: day × hour heatmap -->
+  <main id="view-year" class="view" hidden>
+    <div class="view-head">
+      <div class="title-block">
+        <div class="eyebrow">Every hour of the year</div>
+        <h2 id="y-title">Year</h2>
+        <p class="note">Each column is a day and each row an hour, midnight at the top. Click a day to hear it.</p>
+      </div>
+      <div class="controls"><div class="seg" id="y-years" role="group" aria-label="Choose a year"></div></div>
+    </div>
+    <section class="panel">
+      <div class="summary" id="y-summary"></div>
+      <div class="heat-wrap" id="heat-wrap">
+        <canvas id="heat" role="img" aria-label="Heatmap of hourly clean share for the year"></canvas>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="legend"><span>Clean</span><span class="ramp rev"></span><span>Strained</span><span class="sw-none"></span><span>Not saved</span></div>
+    </section>
+  </main>
+
+  <!-- All time -->
+  <main id="view-all" class="view" hidden>
+    <div class="view-head">
+      <div class="title-block">
+        <div class="eyebrow">The whole archive</div>
+        <h2 id="a-title">All time</h2>
+        <p class="note" id="a-note"></p>
+      </div>
+    </div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Clean share, day by day</h3>
+        <span class="note">Dots are days; the line is a 30-day average. Click to hear a day.</span>
+      </div>
+      <svg class="chart" id="a-chart" role="img" aria-label="Daily clean share across the archive"></svg>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h3>By year</h3></div>
+      <div class="table-wrap"><table class="years" id="a-table"></table></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Data: <a href="https://www.nyiso.com/real-time-dashboard" target="_blank" rel="noopener">NYISO</a> real-time fuel mix and zonal load, 5-minute readings, Eastern time. A new day is saved every morning.</span>
+    <span><a href="https://github.com/jyeung11204/grid-symphony" target="_blank" rel="noopener">Source and raw data on GitHub</a></span>
+    <span id="updated"></span>
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
