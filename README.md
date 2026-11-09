@@ -2,6 +2,8 @@
 
 New York's power grid, played as one minute of music a day.
 
+**Live: https://grid-symphony.vercel.app**
+
 Each power source is an instrument: nuclear is a low drone, hydro a slow pad, wind
 breath and bells, solar and other renewables the melody, gas a buzzing drone with
 brass stabs. The clean share sets the key (bright major when clean, tense Phrygian
